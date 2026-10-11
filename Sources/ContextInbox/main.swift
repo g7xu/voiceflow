@@ -14,6 +14,9 @@ case "--scan-print":
 case "--prompt":
     let rest = Array(args.dropFirst())
     Headless.run { try PromptRole.run(rest) }
+case "--mark-done":
+    let rest = Array(args.dropFirst())
+    Headless.run { try MarkDoneRole.run(rest) }
 case "--snapshot":
     let rest = Array(args.dropFirst())
     Headless.run { try await Snapshot.run(rest) }

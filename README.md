@@ -33,6 +33,13 @@ Code Signing). The build script uses it automatically.
 swift run inbox-tests
 ```
 
+End-to-end tests drive the real app from Python; [docs/how-to-debug-e2e.md](docs/how-to-debug-e2e.md)
+shows how to step through them:
+
+```bash
+cd Tests/e2e && uv run pytest
+```
+
 Behavior, design decisions and the build plan are in [docs/v1-spec.md](docs/v1-spec.md).
 
 The app icon is drawn in code (`scripts/icon/`), with separate artwork for 64 px and below. After
