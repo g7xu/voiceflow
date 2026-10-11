@@ -2,21 +2,23 @@ import Foundation
 import InboxCore
 
 /// Options shared by the scanning roles:
-/// `[--db PATH|:memory:] [--inbox PATH]... [--days N] [--no-calendar | --events FILE] [--trash DIR]
-/// [--destination PATH] [--json]`. The database defaults to an in-memory one, so nothing persists
-/// unless `--db` names a file. `--events` and `--trash` stand in for EventKit and ~/.Trash in tests.
+/// `[--db PATH|:memory:] [--inbox PATH]... [--days N] [--no-calendar | --events FILE [--calendar-denied]]
+/// [--trash DIR] [--destination PATH] [--json]`. The database defaults to an in-memory one, so nothing
+/// persists unless `--db` names a file. `--events` and `--trash` stand in for EventKit and ~/.Trash
+/// in tests; `--calendar-denied` makes the events file behave like revoked calendar access.
 struct ScanOptions {
     var dbPath = ":memory:"
     var inboxes: [URL] = []
     var days = 90
     var useCalendar = true
     var eventsFile: URL?
+    var calendarDenied = false
     var trash: URL?
     var destination: String?
     var json = false
 
-    static let usage = "[--db PATH|:memory:] [--inbox PATH]... [--days N] [--no-calendar | --events FILE] "
-        + "[--trash DIR] [--destination PATH] [--json]"
+    static let usage = "[--db PATH|:memory:] [--inbox PATH]... [--days N] "
+        + "[--no-calendar | --events FILE [--calendar-denied]] [--trash DIR] [--destination PATH] [--json]"
 
     init(_ args: [String]) throws {
         var rest = args[...]
@@ -36,6 +38,8 @@ struct ScanOptions {
             case "--events":
                 guard let path = rest.popFirst() else { throw UsageError() }
                 eventsFile = URL(fileURLWithPath: path)
+            case "--calendar-denied":
+                calendarDenied = true
             case "--trash":
                 guard let path = rest.popFirst() else { throw UsageError() }
                 trash = URL(fileURLWithPath: path)
@@ -62,7 +66,7 @@ struct ScanOptions {
         let store = try openStore()
         let calendar: (any CalendarSource)?
         if let eventsFile {
-            calendar = try FileCalendarSource(contentsOf: eventsFile)
+            calendar = try FileCalendarSource(contentsOf: eventsFile, accessGranted: !calendarDenied)
         } else {
             calendar = useCalendar ? EventKitCalendarSource() : nil
         }

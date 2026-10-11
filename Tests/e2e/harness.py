@@ -51,8 +51,10 @@ class Sandbox:
             folder.mkdir()
         self.db = root / "items.sqlite"
         self.events: list[dict] = []
-        # False runs scans with --no-calendar: what the app does when calendar access is missing.
+        # False runs scans with --no-calendar: no calendar at all (calendar turned off).
         self.calendar_available = True
+        # False keeps the events but reports access as denied (revoked in System Settings).
+        self.calendar_access = True
 
     # ---- Arranging files ------------------------------------------------------------------------
 
@@ -177,7 +179,8 @@ class Sandbox:
         # Always a file, possibly empty, so a test never reads the real calendar on this Mac.
         events_file = self.root / "events.json"
         events_file.write_text(json.dumps(self.events))
-        return args + ["--events", str(events_file)]
+        args += ["--events", str(events_file)]
+        return args if self.calendar_access else args + ["--calendar-denied"]
 
     def _run(self, *args: str) -> str:
         command = [str(self.binary), *args]

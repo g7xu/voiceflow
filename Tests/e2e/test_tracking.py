@@ -12,6 +12,8 @@ def test_first_scan_records_where_each_file_came_from(sandbox: Sandbox):
     sandbox.add_folder("hackathon-starter")
     sandbox.add(".DS_Store")                       # hidden: never an inbox item
     sandbox.add("big-video.mp4.crdownload")        # Chrome still downloading: skipped
+    sandbox.add_folder("installer.dmg.download")   # Safari's in-progress download is a folder
+    sandbox.add("dataset.zip.part")                # Firefox still downloading
 
     # Step 2: run the app's scan.
     report = sandbox.scan()

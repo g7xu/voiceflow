@@ -257,6 +257,26 @@ def test_calendar_unavailable_keeps_the_event_already_matched(sandbox: Sandbox):
     assert row == before, "nothing about the item changed, so the scan shouldn't have rewritten it"
 
 
+def test_revoked_calendar_access_keeps_the_event_already_matched(sandbox: Sandbox):
+    # Step 1: a file lands during a lecture and the first scan matches it.
+    sandbox.event("CSE 120 Lecture", -30, 30, location="Center Hall 105")
+    sandbox.download("lec05.pdf", url="https://canvas.example.edu/files/lec05.pdf")
+    sandbox.scan()
+    before = sandbox.row("lec05.pdf")
+    assert before["event_title"] == "CSE 120 Lecture"
+
+    # Step 2: the user revokes calendar access in System Settings. Unlike a calendar turned off,
+    # the calendar is still there; the app just may not read it.
+    sandbox.calendar_access = False
+
+    # Step 3: the scan can't see any events, which must not read as "no events": it skips matching
+    # and keeps the lecture.
+    report = sandbox.scan()
+
+    assert report.calendar_skipped == "no calendar access"
+    assert sandbox.row("lec05.pdf") == before
+
+
 def test_calendar_that_no_longer_exists_keeps_the_event_already_matched(sandbox: Sandbox):
     # Step 1: a file lands during a lecture from the "School" calendar and is matched.
     sandbox.event("CSE 120 Lecture", -30, 30, calendar="School")

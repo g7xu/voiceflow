@@ -6,8 +6,11 @@ import InboxCore
 /// "canceled"?, "declined"?} with ISO-8601 dates. Calendars are named by their "calendar" title.
 struct FileCalendarSource: CalendarSource {
     private let all: [CalendarEvent]
+    /// False simulates the user revoking calendar access in System Settings.
+    let hasFullAccess: Bool
 
-    init(contentsOf url: URL) throws {
+    init(contentsOf url: URL, accessGranted: Bool) throws {
+        hasFullAccess = accessGranted
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let text = try decoder.singleValueContainer().decode(String.self)
@@ -21,8 +24,7 @@ struct FileCalendarSource: CalendarSource {
         all = try decoder.decode([Entry].self, from: Data(contentsOf: url)).map(\.event)
     }
 
-    var hasFullAccess: Bool { true }
-    func requestAccess() async throws -> Bool { true }
+    func requestAccess() async throws -> Bool { hasFullAccess }
 
     func calendars() -> [CalendarInfo] {
         Set(all.map(\.calendarTitle)).sorted().map {
