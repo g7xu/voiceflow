@@ -8,6 +8,9 @@ switch args.first {
 case "--spike":
     let rest = Array(args.dropFirst())
     Headless.run { try await Spike.run(rest) }
+case "--scan-print":
+    let rest = Array(args.dropFirst())
+    Headless.run { try ScanPrint.run(rest) }
 default:
-    print("ContextInbox: the window isn't built yet; try --spike")
+    print("ContextInbox: the window isn't built yet; try --scan-print or --spike")
 }

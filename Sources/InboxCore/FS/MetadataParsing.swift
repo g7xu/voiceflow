@@ -5,7 +5,24 @@ public struct Quarantine: Equatable, Sendable {
     public var agent: String?
 }
 
+/// Where an item came from, in the form it's stored: sanitized URLs and the raw quarantine agent
+/// (`displayAgent` maps it for display).
+public struct Provenance: Equatable, Sendable {
+    public var sourceURL: String?
+    public var referrerURL: String?
+    public var savedBy: String?
+}
+
 public enum MetadataParsing {
+    public static func provenance(_ raw: RawMetadata) -> Provenance {
+        let origins = raw.whereFroms.map(webOrigins) ?? (source: nil, referrer: nil)
+        return Provenance(
+            sourceURL: origins.source,
+            referrerURL: origins.referrer,
+            savedBy: raw.quarantine.flatMap(quarantine)?.agent
+        )
+    }
+
     /// The http(s) entries of kMDItemWhereFroms, sanitized: normally the download URL, then the page
     /// that linked to it. Mail stores the sender and subject in the same list, and those are dropped.
     public static func webOrigins(_ whereFroms: Data) -> (source: String?, referrer: String?) {
