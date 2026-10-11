@@ -11,6 +11,9 @@ case "--spike":
 case "--scan-print":
     let rest = Array(args.dropFirst())
     Headless.run { try ScanPrint.run(rest) }
+case "--prompt":
+    let rest = Array(args.dropFirst())
+    Headless.run { try PromptRole.run(rest) }
 default:
-    print("ContextInbox: the window isn't built yet; try --scan-print or --spike")
+    print("ContextInbox: the window isn't built yet; try --scan-print, --prompt or --spike")
 }

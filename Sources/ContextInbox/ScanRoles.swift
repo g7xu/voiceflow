@@ -1,16 +1,19 @@
 import Foundation
 import InboxCore
 
-/// `--scan-print [--db PATH|:memory:] [--inbox PATH]... [--days N] [--no-calendar]`: runs one scan
-/// and prints the report, then every item as TSV (status, name, added, source, saved by, event,
-/// that day, current path). The database defaults to an in-memory one, so nothing persists unless
-/// `--db` names a file.
-enum ScanPrint {
-    static func run(_ args: [String]) throws {
-        var dbPath = ":memory:"
-        var inboxes: [URL] = []
-        var days = 90
-        var useCalendar = true
+/// Options shared by the scanning roles:
+/// `[--db PATH|:memory:] [--inbox PATH]... [--days N] [--no-calendar] [--destination PATH]`.
+/// The database defaults to an in-memory one, so nothing persists unless `--db` names a file.
+struct ScanOptions {
+    var dbPath = ":memory:"
+    var inboxes: [URL] = []
+    var days = 90
+    var useCalendar = true
+    var destination: String?
+
+    static let usage = "[--db PATH|:memory:] [--inbox PATH]... [--days N] [--no-calendar] [--destination PATH]"
+
+    init(_ args: [String]) throws {
         var rest = args[...]
         while let flag = rest.popFirst() {
             switch flag {
@@ -25,6 +28,9 @@ enum ScanPrint {
                 days = n
             case "--no-calendar":
                 useCalendar = false
+            case "--destination":
+                guard let path = rest.popFirst() else { throw UsageError() }
+                destination = path
             default:
                 throw UsageError()
             }
@@ -33,13 +39,27 @@ enum ScanPrint {
             let home = FileManager.default.homeDirectoryForCurrentUser
             inboxes = [home.appendingPathComponent("Downloads"), home.appendingPathComponent("Desktop")]
         }
+    }
 
+    func scan() throws -> (ItemStore, ScanReport) {
         let store = dbPath == ":memory:" ? try ItemStore.inMemory() : try ItemStore.open(at: URL(fileURLWithPath: dbPath))
         let calendar = useCalendar ? EventKitCalendarSource() : nil
-        // Every calendar except birthdays and subscriptions; the app will use the user's selection.
+        // Every calendar except birthdays and subscriptions; the app uses the user's selection instead.
         let calendarIDs = Set(calendar?.calendars().filter { !$0.isBackground }.map(\.id) ?? [])
         let settings = ScanSettings(inboxes: inboxes, backfillDays: days, calendarIDs: calendarIDs)
-        let report = try Scanner(store: store, calendar: calendar).scan(settings)
+        return (store, try Scanner(store: store, calendar: calendar).scan(settings))
+    }
+
+    struct UsageError: Error, CustomStringConvertible {
+        var description: String { "usage: --scan-print|--prompt \(ScanOptions.usage)" }
+    }
+}
+
+/// `--scan-print OPTIONS`: one scan, then the report and every item as TSV (status, name, added,
+/// source, saved by, event, that day, current path).
+enum ScanPrint {
+    static func run(_ args: [String]) throws {
+        let (store, report) = try ScanOptions(args).scan()
 
         let done = report.done.sorted { $0.key.rawValue < $1.key.rawValue }.map { "\($0.value) \($0.key.rawValue)" }
         print("scan: \(report.added) added, \(report.retracked) re-tracked, done: "
@@ -64,10 +84,14 @@ enum ScanPrint {
             ].map(Printable.escape).joined(separator: "\t"))
         }
     }
+}
 
-    struct UsageError: Error, CustomStringConvertible {
-        var description: String {
-            "usage: --scan-print [--db PATH|:memory:] [--inbox PATH]... [--days N] [--no-calendar]"
-        }
+/// `--prompt OPTIONS`: one scan, then the Markdown prompt for every tracked item.
+enum PromptRole {
+    static func run(_ args: [String]) throws {
+        let options = try ScanOptions(args)
+        let (store, _) = try options.scan()
+        print(PromptGenerator().render(items: try store.items(status: .tracked), inboxPaths: options.inboxes.map(\.path),
+                                       destinationRoot: options.destination), terminator: "")
     }
 }
