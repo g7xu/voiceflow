@@ -34,3 +34,10 @@ swift run inbox-tests
 ```
 
 Behavior, design decisions and the build plan are in [docs/v1-spec.md](docs/v1-spec.md).
+
+The app icon is drawn in code (`scripts/icon/`), with separate artwork for 64 px and below. After
+changing it, regenerate `Resources/AppIcon.icns`:
+
+```bash
+scripts/make-icon.sh
+```

@@ -18,8 +18,9 @@ BIN="$(swift build -c release --show-bin-path)/ContextInbox"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/ContextInbox"
-# The signature seals Info.plist, so it must be in place first.
+# The signature seals Info.plist and Resources, so they must be in place first.
 cp Info.plist "$APP/Contents/Info.plist"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 codesign --force --sign "${SIGN_ID:--}" "$APP"
 echo "built $APP (signed: ${SIGN_ID:-ad-hoc})"
