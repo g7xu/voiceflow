@@ -16,11 +16,13 @@ import Testing
         }
     }
 
-    /// Writes that are allowed, by file: creating the app's own folder, and the spike's bookmark
-    /// record inside it.
+    /// Writes that are allowed, by file: creating the app's own folder, and the settings file, the
+    /// spike's bookmark record and layout snapshots inside it.
     static let allowed: [String: Set<String>] = [
         "AppPaths.swift": ["createDirectory("],
+        "Settings.swift": [".write(to: paths.config"],
         "Spike.swift": [".write(to: bookmarkFile)"],
+        "Snapshot.swift": [".write(to: snapshotDir", "status.write(to: snapshotDir"],
     ]
 
     static let forbidden = [

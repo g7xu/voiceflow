@@ -60,6 +60,18 @@ public final class ItemStore: Sendable {
         }
     }
 
+    /// Undoes `markDone(reason: .manual)`. Items done for other reasons are left alone: the next
+    /// scan would only mark them done again.
+    @discardableResult
+    public func trackAgain(ids: [Int64], at date: Date) throws -> Int {
+        try writer.write { db in
+            try Item.filter(ids.contains(Column("id")) && Column("done_reason") == Item.DoneReason.manual.rawValue)
+                .updateAll(db, Column("status").set(to: Item.Status.tracked.rawValue),
+                           Column("done_reason").set(to: nil),
+                           Column("status_at").set(to: date))
+        }
+    }
+
     private static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1") { db in

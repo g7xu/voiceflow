@@ -71,6 +71,21 @@ func sampleItem(inode: UInt64 = 1, path: String = "/Users/you/Downloads/a.pdf") 
         #expect(byInode[2]?.doneReason == .moved)
     }
 
+    @Test func trackAgainOnlyUndoesManualDone() throws {
+        let store = try ItemStore.inMemory()
+        var moved = sampleItem(inode: 2)
+        moved.status = .done
+        moved.doneReason = .moved
+        let saved = try store.save([sampleItem(inode: 1), moved])
+        let ids = saved.compactMap(\.id)
+        try store.markDone(ids: ids, reason: .manual, at: t0)
+        #expect(try store.trackAgain(ids: ids, at: t0) == 1)
+        let byInode = Dictionary(uniqueKeysWithValues: try store.items().map { ($0.identity.inode, $0) })
+        #expect(byInode[1]?.status == .tracked)
+        #expect(byInode[1]?.doneReason == nil)
+        #expect(byInode[2]?.doneReason == .moved)
+    }
+
     @Test func filtersByStatus() throws {
         let store = try ItemStore.inMemory()
         var done = sampleItem(inode: 2)
