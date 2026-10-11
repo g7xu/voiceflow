@@ -1,16 +1,22 @@
 import Foundation
 import InboxCore
 
-/// `--scan-print [--inbox PATH]... [--days N] [--no-calendar]`: inbox items as TSV (name, added,
-/// kind, source, saved by, event, that day). Reads only; nothing is stored.
+/// `--scan-print [--db PATH|:memory:] [--inbox PATH]... [--days N] [--no-calendar]`: runs one scan
+/// and prints the report, then every item as TSV (status, name, added, source, saved by, event,
+/// that day, current path). The database defaults to an in-memory one, so nothing persists unless
+/// `--db` names a file.
 enum ScanPrint {
     static func run(_ args: [String]) throws {
+        var dbPath = ":memory:"
         var inboxes: [URL] = []
         var days = 90
         var useCalendar = true
         var rest = args[...]
         while let flag = rest.popFirst() {
             switch flag {
+            case "--db":
+                guard let path = rest.popFirst() else { throw UsageError() }
+                dbPath = path
             case "--inbox":
                 guard let path = rest.popFirst() else { throw UsageError() }
                 inboxes.append(URL(fileURLWithPath: path))
@@ -28,57 +34,40 @@ enum ScanPrint {
             inboxes = [home.appendingPathComponent("Downloads"), home.appendingPathComponent("Desktop")]
         }
 
-        let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
-        let matcher = useCalendar ? makeMatcher(from: cutoff) : nil
-        let reader = LiveMetadataReader()
-        let dateStyle = Date.ISO8601FormatStyle(timeZone: .current)
-        for inbox in inboxes {
-            let urls: [URL]
-            let inboxPath = Printable.escape(inbox.path)
-            do {
-                urls = try LiveDirectoryLister().list(inbox)
-            } catch {
-                print("inbox \(inboxPath): can't list: \(error.localizedDescription)")
-                continue
-            }
-            let read = urls.compactMap { url in (try? reader.read(url)).map { (url: url, raw: $0) } }
-            let recent = read.filter { ($0.raw.addedAt ?? .distantPast) >= cutoff }
-                .sorted { ($0.raw.addedAt ?? .distantPast) > ($1.raw.addedAt ?? .distantPast) }
-            print("inbox \(inboxPath): \(urls.count) items, \(recent.count) added in the last \(days) days, "
-                  + "\(urls.count - read.count) unreadable")
-            for entry in recent {
-                let provenance = MetadataParsing.provenance(entry.raw)
-                let match = entry.raw.addedAt.flatMap { matcher?.match(at: $0) }
-                let dayEvents = entry.raw.addedAt.map { matcher?.dayEvents(at: $0) ?? [] } ?? []
-                print([
-                    entry.url.lastPathComponent,
-                    entry.raw.addedAt.map { $0.formatted(dateStyle) } ?? "-",
-                    entry.raw.isDirectory ? "dir" : "file",
-                    MetadataParsing.displaySource(source: provenance.sourceURL, referrer: provenance.referrerURL) ?? "-",
-                    provenance.savedBy.map(MetadataParsing.displayAgent) ?? "-",
-                    match.map { "\($0.kind.rawValue): \($0.title)" } ?? "-",
-                    dayEvents.isEmpty ? "-" : dayEvents.joined(separator: "; "),
-                ].map(Printable.escape).joined(separator: "\t"))
-            }
-        }
-    }
+        let store = dbPath == ":memory:" ? try ItemStore.inMemory() : try ItemStore.open(at: URL(fileURLWithPath: dbPath))
+        let calendar = useCalendar ? EventKitCalendarSource() : nil
+        // Every calendar except birthdays and subscriptions; the app will use the user's selection.
+        let calendarIDs = Set(calendar?.calendars().filter { !$0.isBackground }.map(\.id) ?? [])
+        let settings = ScanSettings(inboxes: inboxes, backfillDays: days, calendarIDs: calendarIDs)
+        let report = try Scanner(store: store, calendar: calendar).scan(settings)
 
-    /// Matches against every calendar except birthdays and subscriptions, with the spec's 2 h window.
-    private static func makeMatcher(from cutoff: Date) -> EventMatcher? {
-        let source = EventKitCalendarSource()
-        guard source.hasFullAccess else {
-            print("calendar: no full access (grant it with --spike calendar)")
-            return nil
+        let done = report.done.sorted { $0.key.rawValue < $1.key.rawValue }.map { "\($0.value) \($0.key.rawValue)" }
+        print("scan: \(report.added) added, \(report.retracked) re-tracked, done: "
+              + (done.isEmpty ? "none" : done.joined(separator: ", "))
+              + String(format: ", %.3f s", report.duration))
+        for (path, message) in report.folderErrors.sorted(by: { $0.key < $1.key }) {
+            print("folder error: \(Printable.escape(path)): \(message)")
         }
-        let calendars = source.calendars().filter { !$0.isBackground }
-        let window: TimeInterval = 2 * 3600
-        let events = source.events(from: cutoff.addingTimeInterval(-window - 86_400), to: Date(),
-                                   calendarIDs: Set(calendars.map(\.id)))
-        print("calendar: \(calendars.count) calendars, \(events.count) events")
-        return EventMatcher(events: events, window: window)
+        if let skipped = report.calendarSkipped { print("calendar skipped: \(skipped)") }
+
+        let dateStyle = Date.ISO8601FormatStyle(timeZone: .current)
+        for item in try store.items() {
+            print([
+                item.doneReason.map { "done:\($0.rawValue)" } ?? item.status.rawValue,
+                item.name,
+                item.addedAt.formatted(dateStyle),
+                MetadataParsing.displaySource(source: item.provenance.sourceURL, referrer: item.provenance.referrerURL) ?? "-",
+                item.provenance.savedBy.map(MetadataParsing.displayAgent) ?? "-",
+                item.event.map { "\($0.kind.rawValue): \($0.title)" } ?? "-",
+                item.dayEvents.isEmpty ? "-" : item.dayEvents.joined(separator: "; "),
+                item.currentPath ?? "-",
+            ].map(Printable.escape).joined(separator: "\t"))
+        }
     }
 
     struct UsageError: Error, CustomStringConvertible {
-        var description: String { "usage: --scan-print [--inbox PATH]... [--days N] [--no-calendar]" }
+        var description: String {
+            "usage: --scan-print [--db PATH|:memory:] [--inbox PATH]... [--days N] [--no-calendar]"
+        }
     }
 }
