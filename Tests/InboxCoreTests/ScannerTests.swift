@@ -18,6 +18,16 @@ struct ThrowingLister: DirectoryLister {
     func list(_ folder: URL) throws -> [URL] { throw CocoaError(.fileReadNoPermission) }
 }
 
+/// Lists every folder normally except one, which fails as if its access were revoked.
+struct OneFolderUnreadable: DirectoryLister {
+    let unreadable: URL
+
+    func list(_ folder: URL) throws -> [URL] {
+        if folder.standardizedFileURL == unreadable.standardizedFileURL { throw CocoaError(.fileReadNoPermission) }
+        return try LiveDirectoryLister().list(folder)
+    }
+}
+
 /// What revoked folder access looks like to the classifier: nothing resolves.
 struct UnresolvableBookmarks: BookmarkResolving {
     func create(_ url: URL) -> Data? { nil }
@@ -176,6 +186,27 @@ final class Fixture {
         let report = try f.scan(metadata: TweakedMetadata(failing: ["a.pdf"]), bookmarks: UnresolvableBookmarks())
         #expect(report.done.isEmpty)
         #expect(try f.item(named: "a.pdf")?.status == .tracked)
+    }
+
+    @Test func fileMovedIntoAnUnreadableInboxStaysTracked() throws {
+        let f = try Fixture()
+        let desktop = try f.tmp.dir("Desktop")
+        let shot = try f.tmp.file("Desktop/shot.png")
+        let both = ScanSettings(inboxes: [f.inbox, desktop], calendarIDs: ["cal"])
+        try f.scan(settings: both)
+        try FileManager.default.moveItem(at: shot, to: f.inbox.appendingPathComponent("shot.png"))
+        let report = try f.scan(lister: OneFolderUnreadable(unreadable: f.inbox), bookmarks: UnresolvableBookmarks(),
+                                settings: both)
+        #expect(report.done.isEmpty)
+        #expect(try f.item(named: "shot.png")?.status == .tracked)
+    }
+
+    @Test func unfollowableFileIsGoneWhenEveryInboxListed() throws {
+        let f = try Fixture()
+        try f.add("a.pdf")
+        try f.scan()
+        try f.move("a.pdf", to: f.elsewhere)
+        #expect(try f.scan(bookmarks: UnresolvableBookmarks()).done == [.gone: 1])
     }
 
     @Test func itemsOfARemovedInboxAreLeftAlone() throws {

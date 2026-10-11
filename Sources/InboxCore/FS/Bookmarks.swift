@@ -26,18 +26,30 @@ struct DepartureClassifier {
         case done(Item.DoneReason, currentPath: String?)
         /// It resolves to the top level of an inbox: the scan raced a move.
         case stillInInbox
+        /// Where it went couldn't be observed, which is evidence of nothing.
+        case unknown
     }
 
     let metadata: any MetadataReading
     let bookmarks: any BookmarkResolving
     let trashRoots: [URL]
     let inboxRoots: [URL]
+    /// Set when an inbox failed to list in this scan. A file that can't be followed may then have
+    /// moved into that inbox, so failing to follow it no longer means it's gone.
+    let someInboxUnreadable: Bool
 
     func classify(_ item: Item) -> Departure {
-        guard let data = item.bookmark, let url = bookmarks.resolve(data) else { return .done(.gone, currentPath: nil) }
+        let unfollowable: Departure = someInboxUnreadable ? .unknown : .done(.gone, currentPath: nil)
+        guard let data = item.bookmark, let url = bookmarks.resolve(data) else { return unfollowable }
+        let identity: FileIdentity
+        do {
+            identity = try metadata.identity(of: url)
+        } catch {
+            return unfollowable
+        }
         // A bookmark prefers the original path, so after a file is replaced by a new one with the
         // same name it resolves to the newcomer.
-        guard (try? metadata.identity(of: url)) == item.identity else { return .done(.gone, currentPath: nil) }
+        guard identity == item.identity else { return .done(.gone, currentPath: nil) }
 
         let parent = Paths.canonicalDirectory(url.deletingLastPathComponent())
         if trashRoots.contains(where: { Paths.isWithin(parent, Paths.canonicalDirectory($0)) })

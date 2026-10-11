@@ -113,7 +113,7 @@ public final class Scanner: Sendable {
 
         // Phase 3: tracked items a successful listing no longer shows.
         let classifier = DepartureClassifier(metadata: metadata, bookmarks: bookmarks, trashRoots: trashRoots,
-                                             inboxRoots: settings.inboxes)
+                                             inboxRoots: settings.inboxes, someInboxUnreadable: !failedRoots.isEmpty)
         let configuredRoots = Set(settings.inboxes.map(Paths.canonicalDirectory))
         for var item in existing where item.status == .tracked && present[item.identity] == nil {
             let root = Paths.canonicalDirectory(URL(fileURLWithPath: item.inboxPath).deletingLastPathComponent())
