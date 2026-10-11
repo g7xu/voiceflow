@@ -83,7 +83,9 @@ For an item added at time `t`, considering timed events in the enabled calendars
 Canceled events and events you declined never match. All-day events never match as the event;
 their titles are attached as "that day" context. Timed events longer than 12 hours ("Trip to
 NYC", "On call") are treated the same way, since they would otherwise claim every file added
-during them. Birthday and subscribed calendars (holidays, sports) are off by default.
+during them. Birthday and subscribed calendars (holidays, sports) are off by default. Settings
+store the calendars switched *off* (plus background ones switched on), so an account added after
+setup counts without another visit to Settings.
 
 Ties: among overlapping events the latest start wins, then the earliest end, then the title, so
 the result never depends on fetch order.

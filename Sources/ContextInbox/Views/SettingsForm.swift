@@ -112,15 +112,10 @@ struct SettingsForm: View {
         return panel.runModal() == .OK ? panel.url : nil
     }
 
-    /// Choosing any calendar turns "all but birthdays and subscriptions" into an explicit list.
     private func calendarBinding(_ info: CalendarInfo) -> Binding<Bool> {
         Binding(
-            get: { settings.calendarIDs(available: model.availableCalendars).contains(info.id) },
-            set: { on in
-                var ids = settings.calendarIDs(available: model.availableCalendars)
-                if on { ids.insert(info.id) } else { ids.remove(info.id) }
-                settings.calendars = model.availableCalendars.filter { ids.contains($0.id) }.map(CalendarRef.init)
-            }
+            get: { settings.isEnabled(info, available: model.availableCalendars) },
+            set: { settings.setEnabled($0, info, available: model.availableCalendars) }
         )
     }
 }
