@@ -57,6 +57,20 @@ import Testing
         #expect(MetadataParsing.sanitizedURL(input) == expected)
     }
 
+    @Test(arguments: [
+        ("https://canvas.example.edu/courses/123/files", "canvas.example.edu/courses/123/files"),
+        ("https://example.com/blog/lecture-5-scheduling-slides-2026", "example.com/blog/lecture-5-scheduling-slides-2026"),
+        ("https://docs.example.com/document/d/1aB2cD3eF4gH5iJ6kL7mN8oP9qR0sT/edit",
+         "docs.example.com/document/d/…/edit"),
+        ("https://share.example.com/s/9-xQ3vB7nM2kL8pR4tY6wZ1aS5dF0gH==", "share.example.com/s/…"),
+        ("https://example.com/f/3F2504E0-4F89-11D3-9A0C-0305E82C3301/view", "example.com/f/…/view"),
+        ("https://example.com/sha/e3b0c44298fc1c149afbf4c8996fb924", "example.com/sha/…"),
+        ("https://example.com/", "example.com"),
+    ])
+    func displaySourceMasksOpaqueSegments(referrer: String, expected: String) {
+        #expect(MetadataParsing.displaySource(source: nil, referrer: referrer) == expected)
+    }
+
     @Test func displaySourcePrefersReferrerPage() {
         #expect(MetadataParsing.displaySource(source: "https://cdn.example.com/x", referrer: "https://canvas.example.edu/courses/1/files/")
                 == "canvas.example.edu/courses/1/files")

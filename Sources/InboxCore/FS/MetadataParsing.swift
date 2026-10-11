@@ -65,13 +65,25 @@ public enum MetadataParsing {
         return parts.string
     }
 
-    /// The referring page as host + path, else only the download's host: download paths can embed
-    /// tokens (signed CDN links), referring pages rarely do.
+    /// The referring page as host + path, else only the download's host: download paths often embed
+    /// tokens (signed CDN links). Referring pages can too (share links, document IDs), so opaque
+    /// path segments are shown as "…".
     public static func displaySource(source: String?, referrer: String?) -> String? {
         if let referrer, let page = URLComponents(string: referrer), let host = page.host {
-            let path = page.path.hasSuffix("/") ? String(page.path.dropLast()) : page.path
-            return host + path
+            let segments = page.path.split(separator: "/", omittingEmptySubsequences: true)
+                .map { isOpaque($0) ? "…" : String($0) }
+            return segments.isEmpty ? host : host + "/" + segments.joined(separator: "/")
         }
         return source.flatMap { URLComponents(string: $0)?.host }
+    }
+
+    /// An ID or token rather than a word: a UUID, or a run of 16+ characters between separators
+    /// that mixes letters and digits. Readable slugs ("lecture-5-scheduling") are runs of short words.
+    static func isOpaque(_ segment: Substring) -> Bool {
+        if UUID(uuidString: String(segment)) != nil { return true }
+        let runs = segment.split(whereSeparator: { "-_.~".contains($0) })
+        return runs.contains { run in
+            run.count >= 16 && run.contains(where: \.isNumber) && run.contains(where: \.isLetter)
+        }
     }
 }
