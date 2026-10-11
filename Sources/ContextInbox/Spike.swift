@@ -48,7 +48,7 @@ enum Spike {
             let webCount = [origins?.source, origins?.referrer].compactMap { $0 }.count
             let added = meta.addedAt.map { String(Int($0.timeIntervalSince1970)) } ?? "-"
             print([url.lastPathComponent, added, String(meta.identity.inode), String(webCount),
-                   meta.quarantine ?? "-"].joined(separator: "\t"))
+                   meta.quarantine ?? "-"].map(Printable.escape).joined(separator: "\t"))
         }
     }
 
@@ -66,7 +66,7 @@ enum Spike {
         for source in store.sources.sorted(by: { $0.title < $1.title }) {
             let calendars = source.calendars(for: .event).sorted { $0.title < $1.title }
             guard !calendars.isEmpty else { continue }
-            print("source: \(source.title) (type \(source.sourceType.rawValue))")
+            print("source: \(Printable.escape(source.title)) (type \(source.sourceType.rawValue))")
             for calendar in calendars {
                 var buckets: [Int] = []
                 var oldest: Date?
@@ -79,7 +79,7 @@ enum Spike {
                     if let first = events.map(\.startDate).min() { oldest = min(oldest ?? first, first) }
                 }
                 let oldestText = oldest.map { ISO8601DateFormatter().string(from: $0) } ?? "-"
-                print("  \(calendar.title) (type \(calendar.type.rawValue)): "
+                print("  \(Printable.escape(calendar.title)) (type \(calendar.type.rawValue)): "
                       + buckets.map(String.init).joined(separator: " ") + "  oldest \(oldestText)")
             }
         }
@@ -96,7 +96,7 @@ enum Spike {
                                      "volume": identity.volumeUUID, "inode": Int64(identity.inode)]
         try PropertyListSerialization.data(fromPropertyList: record, format: .binary, options: 0)
             .write(to: bookmarkFile)
-        print("saved bookmark for \(path) inode \(identity.inode)")
+        print("saved bookmark for \(Printable.escape(path)) inode \(identity.inode)")
     }
 
     static func bookmarkResolve() throws {
@@ -104,14 +104,14 @@ enum Spike {
               let record = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
               let bookmark = record["bookmark"] as? Data
         else { throw SpikeError.noBookmark }
-        print("created for: \(record["path"] ?? "?") inode \(record["inode"] ?? "?")")
+        print("created for: \(Printable.escape(record["path"] as? String ?? "?")) inode \(record["inode"] ?? "?")")
         var stale = false
         do {
             let url = try URL(resolvingBookmarkData: bookmark, options: [.withoutUI, .withoutMounting],
                               relativeTo: nil, bookmarkDataIsStale: &stale)
             let identity = try? LiveMetadataReader().identity(of: url)
             let same = identity.map { $0.inode == UInt64(record["inode"] as? Int64 ?? -1) } ?? false
-            print("resolved: \(url.path)\nstale: \(stale)\ninode now: \(identity.map { String($0.inode) } ?? "-")"
+            print("resolved: \(Printable.escape(url.path))\nstale: \(stale)\ninode now: \(identity.map { String($0.inode) } ?? "-")"
                   + "\nsame file: \(same)")
         } catch {
             print("resolve failed: \(error.localizedDescription)")

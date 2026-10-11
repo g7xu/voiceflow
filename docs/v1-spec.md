@@ -80,7 +80,12 @@ For an item added at time `t`, considering timed events in the enabled calendars
 3. **None:** otherwise, no event.
 
 Canceled events and events you declined never match. All-day events never match as the event;
-their titles are attached as "that day" context.
+their titles are attached as "that day" context. Timed events longer than 12 hours ("Trip to
+NYC", "On call") are treated the same way, since they would otherwise claim every file added
+during them. Birthday and subscribed calendars (holidays, sports) are off by default.
+
+Ties: among overlapping events the latest start wins, then the earliest end, then the title, so
+the result never depends on fetch order.
 
 Each scan fetches events once, from the oldest tracked item's date added (or the backfill start,
 whichever is earlier) to now, and matches in memory. Tracked items are re-matched on each scan,
