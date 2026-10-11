@@ -1,0 +1,89 @@
+import Foundation
+
+public struct Quarantine: Equatable, Sendable {
+    public var timestamp: Date?
+    public var agent: String?
+}
+
+/// Where an item came from, in the form it's stored: sanitized URLs and the raw quarantine agent
+/// (`displayAgent` maps it for display).
+public struct Provenance: Equatable, Sendable {
+    public var sourceURL: String?
+    public var referrerURL: String?
+    public var savedBy: String?
+}
+
+public enum MetadataParsing {
+    public static func provenance(_ raw: RawMetadata) -> Provenance {
+        let origins = raw.whereFroms.map(webOrigins) ?? (source: nil, referrer: nil)
+        return Provenance(
+            sourceURL: origins.source,
+            referrerURL: origins.referrer,
+            savedBy: raw.quarantine.flatMap(quarantine)?.agent
+        )
+    }
+
+    /// The http(s) entries of kMDItemWhereFroms, sanitized: normally the download URL, then the page
+    /// that linked to it. Mail stores the sender and subject in the same list, and those are dropped.
+    public static func webOrigins(_ whereFroms: Data) -> (source: String?, referrer: String?) {
+        guard let list = try? PropertyListSerialization.propertyList(from: whereFroms, format: nil) as? [Any] else {
+            return (nil, nil)
+        }
+        let urls = list.compactMap { ($0 as? String).flatMap(sanitizedURL) }
+        return (urls.first, urls.dropFirst().first)
+    }
+
+    /// `com.apple.quarantine` holds `flags;hex unix seconds;agent;event UUID`.
+    public static func quarantine(_ raw: String) -> Quarantine? {
+        let fields = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\0").union(.whitespacesAndNewlines))
+            .split(separator: ";", omittingEmptySubsequences: false)
+        guard fields.count >= 3 else { return nil }
+        let seconds = UInt64(fields[1], radix: 16)
+        return Quarantine(
+            timestamp: seconds.map { Date(timeIntervalSince1970: TimeInterval($0)) },
+            agent: fields[2].isEmpty ? nil : String(fields[2])
+        )
+    }
+
+    private static let agentNames = ["sharingd": "AirDrop"]
+
+    public static func displayAgent(_ agent: String) -> String {
+        agentNames[agent] ?? agent
+    }
+
+    /// `scheme://host/path` only. Query strings and fragments often carry access tokens, and the
+    /// result ends up in a prompt pasted elsewhere. Anything other than http(s) gives nil.
+    public static func sanitizedURL(_ string: String) -> String? {
+        guard var parts = URLComponents(string: string),
+              let scheme = parts.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              let host = parts.host, !host.isEmpty
+        else { return nil }
+        parts.user = nil
+        parts.password = nil
+        parts.query = nil
+        parts.fragment = nil
+        return parts.string
+    }
+
+    /// The referring page as host + path, else only the download's host: download paths often embed
+    /// tokens (signed CDN links). Referring pages can too (share links, document IDs), so opaque
+    /// path segments are shown as "…".
+    public static func displaySource(source: String?, referrer: String?) -> String? {
+        if let referrer, let page = URLComponents(string: referrer), let host = page.host {
+            let segments = page.path.split(separator: "/", omittingEmptySubsequences: true)
+                .map { isOpaque($0) ? "…" : String($0) }
+            return segments.isEmpty ? host : host + "/" + segments.joined(separator: "/")
+        }
+        return source.flatMap { URLComponents(string: $0)?.host }
+    }
+
+    /// An ID or token rather than a word: a UUID, or a run of 16+ characters between separators
+    /// that mixes letters and digits. Readable slugs ("lecture-5-scheduling") are runs of short words.
+    static func isOpaque(_ segment: Substring) -> Bool {
+        if UUID(uuidString: String(segment)) != nil { return true }
+        let runs = segment.split(whereSeparator: { "-_.~".contains($0) })
+        return runs.contains { run in
+            run.count >= 16 && run.contains(where: \.isNumber) && run.contains(where: \.isLetter)
+        }
+    }
+}

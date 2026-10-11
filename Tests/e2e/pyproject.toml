@@ -1,0 +1,9 @@
+[project]
+name = "contextinbox-e2e"
+version = "0.1.0"
+description = "End-to-end tests that drive the ContextInbox binary from Python"
+requires-python = ">=3.12"
+dependencies = ["pytest==9.0.3"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
